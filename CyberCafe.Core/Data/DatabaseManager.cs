@@ -1,20 +1,14 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using System.Data;
 using System.Text;
 
 namespace CyberCafe.Core.Data
 {
-    /// <summary>
-    /// Manages all database operations for the CyberCafe system using SQLite.
-    /// </summary>
     public class DatabaseManager
     {
         private const string DbFileName = "CyberCafeDB.db";
         private const string ConnectionString = "Data Source=" + DbFileName + ";";
 
-        /// <summary>
-        /// Initializes the database by creating the file and required tables if they do not exist.
-        /// </summary>
         public static void InitializeDatabase()
         {
             if (!File.Exists(DbFileName))
@@ -26,13 +20,9 @@ namespace CyberCafe.Core.Data
             {
                 conn.Open();
 
-                // Enable Write-Ahead Logging (WAL) mode to prevent "Database is locked" errors
                 using (var cmd = new SqliteCommand("PRAGMA journal_mode=WAL;", conn))
-                {
                     cmd.ExecuteNonQuery();
-                }
 
-                // 1. Employees Table
                 string sqlEmployees = @"
                     CREATE TABLE IF NOT EXISTS Employees (
                         EmployeeID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +33,6 @@ namespace CyberCafe.Core.Data
                         IsActive BOOLEAN DEFAULT 1
                     );";
 
-                // 2. Devices Table
                 string sqlDevices = @"
                     CREATE TABLE IF NOT EXISTS Devices (
                         DeviceID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +42,7 @@ namespace CyberCafe.Core.Data
                         Status TINYINT DEFAULT 0
                     );";
 
-                // 3. Vouchers Table
+                // تم إضافة SaleDate هنا
                 string sqlVouchers = @"
                     CREATE TABLE IF NOT EXISTS Vouchers (
                         VoucherCode VARCHAR(10) PRIMARY KEY,
@@ -64,11 +53,11 @@ namespace CyberCafe.Core.Data
                         ValidityDays INT DEFAULT 30,
                         SoldByEmpID INT,
                         CreatedDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        SaleDate DATETIME,
                         ExpiryDate DATETIME,
                         FOREIGN KEY(SoldByEmpID) REFERENCES Employees(EmployeeID)
                     );";
 
-                // 4. Sessions Table (for records)
                 string sqlSessions = @"
                     CREATE TABLE IF NOT EXISTS Sessions (
                         SessionID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +71,6 @@ namespace CyberCafe.Core.Data
                         FOREIGN KEY(DeviceID) REFERENCES Devices(DeviceID)
                     );";
 
-                // 5. Financial Transactions Table
                 string sqlTransactions = @"
                     CREATE TABLE IF NOT EXISTS Transactions (
                         TransID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,16 +89,12 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Seeds the database with default test data if it's not already present.
-        /// </summary>
         public static void SeedTestData()
         {
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
 
-                // 1. Add default administrator (admin / 1234)
                 string checkEmp = "SELECT COUNT(*) FROM Employees WHERE Username = 'admin'";
                 using (var checkCmd = new SqliteCommand(checkEmp, conn))
                 {
@@ -125,7 +109,6 @@ namespace CyberCafe.Core.Data
                     }
                 }
 
-                // 2. Add test voucher
                 string checkSql = "SELECT count(*) FROM Vouchers WHERE VoucherCode = 'TEST123'";
                 using (var checkCmd = new SqliteCommand(checkSql, conn))
                 {
@@ -141,11 +124,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Executes a non-query SQL command using an existing connection.
-        /// </summary>
-        /// <param name="conn">The SQLite connection to use.</param>
-        /// <param name="sql">The SQL command string.</param>
         private static void ExecuteNonQuery(SqliteConnection conn, string sql)
         {
             using (var cmd = new SqliteCommand(sql, conn))
@@ -154,11 +132,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Computes a SHA-256 hash of a string.
-        /// </summary>
-        /// <param name="password">The string to hash.</param>
-        /// <returns>A hexadecimal string representation of the hash.</returns>
         private static string HashPassword(string password)
         {
             using (var sha256 = System.Security.Cryptography.SHA256.Create())
@@ -168,15 +141,8 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        // === Voucher Management Methods ===
+        // === Voucher Methods ===
 
-        /// <summary>
-        /// Adds a new voucher to the database.
-        /// </summary>
-        /// <param name="code">The unique voucher code.</param>
-        /// <param name="minutes">The total minutes allowed by the voucher.</param>
-        /// <param name="price">The price of the voucher.</param>
-        /// <param name="validityDays">The number of days the voucher remains valid after activation.</param>
         public static void AddVoucher(string code, int minutes, decimal price, int validityDays)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -194,15 +160,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Retrieves vouchers filtered by various criteria.
-        /// </summary>
-        /// <param name="status">The status filter string.</param>
-        /// <param name="from">The start date for filtering creation date.</param>
-        /// <param name="to">The end date for filtering creation date.</param>
-        /// <param name="priceFrom">The minimum price filter.</param>
-        /// <param name="priceTo">The maximum price filter.</param>
-        /// <returns>A DataTable containing the filtered vouchers.</returns>
         public static DataTable GetFilteredVouchers(string status, DateTime? from, DateTime? to, decimal priceFrom, decimal priceTo)
         {
             DataTable dt = new DataTable();
@@ -241,32 +198,25 @@ namespace CyberCafe.Core.Data
             return dt;
         }
 
-        /// <summary>
-        /// Marks a voucher as sold by an employee.
-        /// </summary>
-        /// <param name="code">The voucher code to sell.</param>
-        /// <param name="empId">The ID of the employee selling the voucher.</param>
-        /// <returns>True if the voucher was successfully sold, otherwise false.</returns>
+        // تم تصحيح هذه الدالة لتسجل تاريخ البيع بالتوقيت المحلي
         public static bool SellVoucher(string code, int empId)
         {
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
-                string sql = "UPDATE Vouchers SET SoldByEmpID = @empId WHERE VoucherCode = @code AND Status = 0 AND SoldByEmpID IS NULL";
+                string sql = "UPDATE Vouchers SET Status = 1, SoldByEmpID = @empId, SaleDate = @saleDate WHERE VoucherCode = @code AND Status = 0";
+
                 using (var cmd = new SqliteCommand(sql, conn))
                 {
                     cmd.Parameters.AddWithValue("@empId", empId);
                     cmd.Parameters.AddWithValue("@code", code);
+                    cmd.Parameters.AddWithValue("@saleDate", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")); // التوقيت المحلي
+
                     return cmd.ExecuteNonQuery() > 0;
                 }
             }
         }
 
-        /// <summary>
-        /// Deletes a voucher from the database if it hasn't been used or sold.
-        /// </summary>
-        /// <param name="code">The voucher code to delete.</param>
-        /// <returns>True if the deletion was successful, otherwise false.</returns>
         public static bool DeleteVoucher(string code)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -281,11 +231,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Validates a voucher code and prepares it for activation.
-        /// </summary>
-        /// <param name="code">The voucher code to validate.</param>
-        /// <returns>A status string starting with SUCCESS if valid, or an error message.</returns>
         public static string ValidateVoucher(string code)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -330,11 +275,6 @@ namespace CyberCafe.Core.Data
             return "Error: Invalid Voucher Code.";
         }
 
-        /// <summary>
-        /// Updates the remaining minutes for a specific voucher.
-        /// </summary>
-        /// <param name="code">The voucher code to update.</param>
-        /// <param name="minutes">The new remaining minutes.</param>
         public static void SetRemainingMinutes(string code, int minutes)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -353,16 +293,11 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Pauses an active voucher session, typically due to network disconnection.
-        /// </summary>
-        /// <param name="code">The voucher code to pause.</param>
         public static void PauseVoucher(string code)
         {
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
-                // Set status to Paused (3) if it was Active (1)
                 string sql = "UPDATE Vouchers SET Status = 3 WHERE VoucherCode = @code AND Status = 1";
                 using (var cmd = new SqliteCommand(sql, conn))
                 {
@@ -372,14 +307,8 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        // === Employee Management Methods ===
+        // === Employee Methods ===
 
-        /// <summary>
-        /// Validates employee credentials for login.
-        /// </summary>
-        /// <param name="username">The employee's username.</param>
-        /// <param name="password">The employee's password.</param>
-        /// <returns>A DataTable containing employee details if login is successful.</returns>
         public static DataTable ValidateEmployeeLogin(string username, string password)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -400,11 +329,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Retrieves all employees, optionally filtered by a search term.
-        /// </summary>
-        /// <param name="searchTerm">An optional search term for filtering by name or username.</param>
-        /// <returns>A DataTable containing employee information.</returns>
         public static DataTable GetAllEmployees(string searchTerm = null)
         {
             DataTable dt = new DataTable();
@@ -424,14 +348,6 @@ namespace CyberCafe.Core.Data
             return dt;
         }
 
-        /// <summary>
-        /// Adds a new employee to the system.
-        /// </summary>
-        /// <param name="name">The full name of the employee.</param>
-        /// <param name="username">The employee's unique username.</param>
-        /// <param name="password">The employee's password.</param>
-        /// <param name="role">The employee's role level.</param>
-        /// <returns>True if the employee was added successfully, false if the username already exists.</returns>
         public static bool AddEmployee(string name, string username, string password, int role)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -457,13 +373,6 @@ namespace CyberCafe.Core.Data
             return true;
         }
 
-        /// <summary>
-        /// Updates the details of an existing employee.
-        /// </summary>
-        /// <param name="id">The ID of the employee to update.</param>
-        /// <param name="name">The new full name.</param>
-        /// <param name="role">The new role level.</param>
-        /// <param name="password">The new password (optional).</param>
         public static void UpdateEmployee(int id, string name, int role, string password = null)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -484,11 +393,6 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        /// <summary>
-        /// Toggles the active status of an employee.
-        /// </summary>
-        /// <param name="id">The ID of the employee to update.</param>
-        /// <param name="isActive">The new active status.</param>
         public static void ToggleEmployeeStatus(int id, bool isActive)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -504,13 +408,8 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        // === Device Management Methods ===
+        // === Device Methods ===
 
-        /// <summary>
-        /// Retrieves the friendly name of a device based on its MAC address.
-        /// </summary>
-        /// <param name="macAddress">The MAC address of the device.</param>
-        /// <returns>The friendly name of the device, or the MAC address if no name is assigned.</returns>
         public static string GetDeviceName(string macAddress)
         {
             using (var conn = new SqliteConnection(ConnectionString))
@@ -531,17 +430,11 @@ namespace CyberCafe.Core.Data
             return macAddress;
         }
 
-        /// <summary>
-        /// Saves or updates the friendly name of a device.
-        /// </summary>
-        /// <param name="macAddress">The MAC address of the device.</param>
-        /// <param name="friendlyName">The friendly name to assign to the device.</param>
         public static void SaveDeviceName(string macAddress, string friendlyName)
         {
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
-                // Attempt to update existing device
                 string sqlUpdate = "UPDATE Devices SET FriendlyName = @name WHERE MACAddress = @mac";
                 using (var cmd = new SqliteCommand(sqlUpdate, conn))
                 {
@@ -549,7 +442,6 @@ namespace CyberCafe.Core.Data
                     cmd.Parameters.AddWithValue("@mac", macAddress);
                     int rows = cmd.ExecuteNonQuery();
 
-                    // If no rows updated, insert as a new device
                     if (rows == 0)
                     {
                         string sqlInsert = "INSERT INTO Devices (MACAddress, FriendlyName, Status) VALUES (@mac, @name, 1)";
@@ -564,27 +456,23 @@ namespace CyberCafe.Core.Data
             }
         }
 
-        // === Reporting Methods ===
+        // === Reporting Methods (Modified) ===
 
-        /// <summary>
-        /// Generates a report of daily sales for a specific date.
-        /// </summary>
-        /// <param name="date">The date for the report.</param>
-        /// <returns>A DataTable containing sales summary data.</returns>
         public static DataTable GetDailySalesReport(DateTime date)
         {
             DataTable dt = new DataTable();
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
+                // تصحيح: استخدام SaleDate و TotalMinutes
                 string sql = @"
-                    SELECT 
-                        COUNT(*) as TotalCount, 
-                        SUM(Price) as TotalPrice, 
-                        SUM(TotalMinutes) as TotalMinutes 
-                    FROM Vouchers 
-                    WHERE SoldByEmpID IS NOT NULL 
-                    AND date(CreatedDate) = date(@date)";
+            SELECT 
+                COUNT(*) as TotalCount, 
+                SUM(Price) as TotalPrice, 
+                SUM(TotalMinutes) as TotalMinutes 
+            FROM Vouchers 
+            WHERE SoldByEmpID IS NOT NULL 
+            AND date(SaleDate) = date(@date)";
 
                 using (var cmd = new SqliteCommand(sql, conn))
                 {
@@ -598,18 +486,13 @@ namespace CyberCafe.Core.Data
             return dt;
         }
 
-        /// <summary>
-        /// Generates an employee performance report for a specific date range.
-        /// </summary>
-        /// <param name="from">The start date for the range.</param>
-        /// <param name="to">The end date for the range.</param>
-        /// <returns>A DataTable containing employee performance statistics.</returns>
         public static DataTable GetEmployeePerformanceReport(DateTime from, DateTime to)
         {
             DataTable dt = new DataTable();
             using (var conn = new SqliteConnection(ConnectionString))
             {
                 conn.Open();
+                // تصحيح: استخدام SaleDate بدلاً من CreatedDate
                 string sql = @"
                     SELECT 
                         E.FullName as Employee, 
@@ -618,8 +501,8 @@ namespace CyberCafe.Core.Data
                     FROM Vouchers V
                     JOIN Employees E ON V.SoldByEmpID = E.EmployeeID
                     WHERE V.SoldByEmpID IS NOT NULL
-                    AND date(V.CreatedDate) >= date(@from)
-                    AND date(V.CreatedDate) <= date(@to)
+                    AND date(V.SaleDate) >= date(@from)
+                    AND date(V.SaleDate) <= date(@to)
                     GROUP BY E.FullName";
 
                 using (var cmd = new SqliteCommand(sql, conn))

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net.NetworkInformation;
 using CyberCafe.Client.Helpers;
 using CyberCafe.Client.Network;
@@ -50,7 +50,7 @@ namespace CyberCafe.Client
             EnterKioskMode();
 
             // 4. Configure network connectivity (order is critical)
-            
+
             // A. Retrieve the MAC Address for device identification
             _myDeviceId = GetMacAddress();
 
@@ -114,21 +114,40 @@ namespace CyberCafe.Client
         // === Connection Methods ===
 
         /// <summary>
-        /// Attempts to connect to the server in a background task.
+        /// Attempts to discover the server and connect in a background task.
         /// </summary>
         private void TryConnect()
         {
-            lblStatus.Text = "Connecting...";
+            lblStatus.Text = "Discovering Server...";
             lblStatus.ForeColor = Color.Silver;
 
             System.Threading.Tasks.Task.Run(() =>
             {
-                bool connected = _network.Connect();
-                if (!connected)
+                // الخطوة 1: البحث عن السيرفر في الشبكة
+                bool found = _network.DiscoverServer();
+
+                if (found)
                 {
+                    // تم العثور على السيرفر، حاول الاتصال الآن
+                    this.Invoke(new Action(() => lblStatus.Text = "Connecting..."));
+
+                    bool connected = _network.Connect();
+
+                    if (!connected)
+                    {
+                        this.Invoke(new Action(() =>
+                        {
+                            lblStatus.Text = "Connection Failed";
+                            lblStatus.ForeColor = Color.Red;
+                        }));
+                    }
+                }
+                else
+                {
+                    // لم يتم العثور على السيرفر
                     this.Invoke(new Action(() =>
                     {
-                        lblStatus.Text = "Server Offline";
+                        lblStatus.Text = "Server Not Found";
                         lblStatus.ForeColor = Color.Red;
                     }));
                 }

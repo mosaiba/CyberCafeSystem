@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -35,8 +36,11 @@ namespace CyberCafe.Client.Network
 
         private TcpClient _client;
         private NetworkStream _stream;
-        private string _serverIp = "127.0.0.1";
+
+        // تم إزالة الـ IP الثابت ليتم اكتشافه تلقائياً
+        private string _serverIp = "";
         private int _port = 13000;
+        private int _discoveryPort = 13001; // بورت الاكتشاف
 
         // System.Threading.Timer is used for stability as it runs in the background thread pool.
         private System.Threading.Timer _heartbeatTimer;
@@ -61,11 +65,62 @@ namespace CyberCafe.Client.Network
         }
 
         /// <summary>
+        /// جديد: يبحث عن السيرفر في الشبكة باستخدام UDP Broadcast.
+        /// </summary>
+        /// <returns>True إذا تم العثور على السيرفر وتحديد الـ IP، وإلا False.</returns>
+        public bool DiscoverServer()
+        {
+            using (UdpClient udp = new UdpClient())
+            {
+                try
+                {
+                    udp.EnableBroadcast = true;
+                    udp.Client.ReceiveTimeout = 3000; // انتظار 3 ثواني كحد أقصى
+
+                    string request = "CYBERCAFE_DISCOVERY_REQUEST";
+                    byte[] data = Encoding.UTF8.GetBytes(request);
+
+                    // إرسال طلب البحث لجميع الأجهزة
+                    udp.Send(data, data.Length, "255.255.255.255", _discoveryPort);
+
+                    // انتظار الرد
+                    IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+                    byte[] response = udp.Receive(ref remoteEP);
+                    string respString = Encoding.UTF8.GetString(response);
+
+                    // تحليل الرد (CYBERCAFE_SERVER:IP:PORT)
+                    if (respString.StartsWith("CYBERCAFE_SERVER:"))
+                    {
+                        string[] parts = respString.Split(':');
+                        if (parts.Length >= 3)
+                        {
+                            _serverIp = parts[1]; // تحديث الـ IP
+                            // _port = int.Parse(parts[2]); // يمكن استخدامه إذا كان البورت متغيراً
+                            return true;
+                        }
+                    }
+                }
+                catch (SocketException)
+                {
+                    // انتهى الوقت ولم يتم العثور على رد
+                    return false;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Establishes a connection to the server.
         /// </summary>
         /// <returns>True if the connection was successful, otherwise false.</returns>
         public bool Connect()
         {
+            // إذا لم يتم اكتشاف الـ IP مسبقاً، لا تحاول الاتصال
+            if (string.IsNullOrEmpty(_serverIp)) return false;
             if (_isConnected) return true;
 
             try

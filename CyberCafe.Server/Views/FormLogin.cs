@@ -1,27 +1,17 @@
-using System.Data;
+﻿using System.Data;
 using CyberCafe.Core.Data;
 
 namespace CyberCafe.Server.Views
 {
-    /// <summary>
-    /// Represents the login form for the server application.
-    /// </summary>
     public partial class FormLogin : Form
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FormLogin"/> class.
-        /// </summary>
         public FormLogin()
         {
             InitializeComponent();
+            // ربط حدث الإغلاق يدوياً للتأكد من عمله
+            this.FormClosing += FormLogin_FormClosing;
         }
 
-        /// <summary>
-        /// Handles the Click event of the Login button.
-        /// Validates user credentials against the database and sets the current session.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void btnLogin_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(txtUsername.Text) || string.IsNullOrEmpty(txtPassword.Text))
@@ -30,18 +20,15 @@ namespace CyberCafe.Server.Views
                 return;
             }
 
-            // Call database validation method
             DataTable result = DatabaseManager.ValidateEmployeeLogin(txtUsername.Text, txtPassword.Text);
 
             if (result.Rows.Count > 0)
             {
-                // Record user data in the session
                 DataRow row = result.Rows[0];
                 CurrentSession.EmployeeID = Convert.ToInt32(row["EmployeeID"]);
                 CurrentSession.FullName = row["FullName"].ToString();
                 CurrentSession.Role = Convert.ToInt32(row["Role"]);
 
-                // Set dialog result and close the login screen
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             }
@@ -52,23 +39,40 @@ namespace CyberCafe.Server.Views
             }
         }
 
-        /// <summary>
-        /// Handles the Click event of the Exit button.
-        /// Terminates the application.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
+        // الزر الآن فقط يطلب إغلاق النافذة، والحدث FormClosing يتولى الباقي
         private void btnExit_Click(object sender, EventArgs e)
         {
-            Application.Exit();
+            this.Close();
         }
 
-        /// <summary>
-        /// Handles the KeyDown event of the password text box.
-        /// Allows the user to press Enter to trigger the login process.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="KeyEventArgs"/> instance containing the event data.</param>
+        // هذا الحدث هو المسؤول الوحيد عن قرار الإغلاق أو الإلغاء
+        private void FormLogin_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // إذا تم تسجيل الدخول بنجاح، اسمح بالإغلاق دون أسئلة
+            if (this.DialogResult == DialogResult.OK) return;
+
+            // إذا كان السبب هو ضغط المستخدم على X أو زر الخروج (وليس إغلاق من الكود)
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                // إلغاء أمر الإغلاق مؤقتاً لنسأل المستخدم
+                e.Cancel = true;
+
+                DialogResult dr = MessageBox.Show(
+                    "WARNING: This will shut down the server and disconnect all clients.\nAre you sure you want to exit?",
+                    "Confirm Server Shutdown",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (dr == DialogResult.Yes)
+                {
+                    // إذا وافق، نلغي خاصية Cancel ونخرج من البرنامج
+                    e.Cancel = false;
+                    Application.Exit();
+                }
+                // إذا ضغط No، الـ e.Cancel يظل true، وبالتالي النافذة لن تغلق
+            }
+        }
+
         private void txtPassword_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
@@ -77,12 +81,6 @@ namespace CyberCafe.Server.Views
             }
         }
 
-        /// <summary>
-        /// Handles the KeyDown event of the username text box.
-        /// Allows the user to press Enter to go to the next text box
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="KeyEventArgs"/> instance containing the event data.</param>
         private void txtUsername_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)

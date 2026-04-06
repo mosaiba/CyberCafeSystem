@@ -75,7 +75,7 @@
             btnLogin.FlatStyle = FlatStyle.Flat;
             btnLogin.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             btnLogin.ForeColor = Color.White;
-            btnLogin.Location = new Point(103, 313);
+            btnLogin.Location = new Point(103, 303);
             btnLogin.Margin = new Padding(3, 4, 3, 4);
             btnLogin.Name = "btnLogin";
             btnLogin.Size = new Size(229, 51);
@@ -86,17 +86,17 @@
             // 
             // btnExit
             // 
-            btnExit.BackColor = Color.FromArgb(70, 70, 75);
+            btnExit.BackColor = Color.FromArgb(192, 0, 0);
             btnExit.FlatAppearance.BorderSize = 0;
             btnExit.FlatStyle = FlatStyle.Flat;
-            btnExit.Font = new Font("Segoe UI", 9F);
+            btnExit.Font = new Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point, 0);
             btnExit.ForeColor = Color.White;
             btnExit.Location = new Point(103, 373);
             btnExit.Margin = new Padding(3, 4, 3, 4);
             btnExit.Name = "btnExit";
-            btnExit.Size = new Size(229, 37);
+            btnExit.Size = new Size(229, 47);
             btnExit.TabIndex = 3;
-            btnExit.Text = "EXIT";
+            btnExit.Text = "Turn Off The Server";
             btnExit.UseVisualStyleBackColor = false;
             btnExit.Click += btnExit_Click;
             // 

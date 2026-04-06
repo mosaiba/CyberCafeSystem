@@ -4,16 +4,10 @@ using CyberCafe.Core.Data;
 
 namespace CyberCafe.Server.Views
 {
-    /// <summary>
-    /// Form for generating and printing sales and employee performance reports.
-    /// </summary>
     public partial class FormReports : Form
     {
         private WebBrowser webBrowser1 = new WebBrowser();
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="FormReports"/> class.
-        /// </summary>
         public FormReports()
         {
             InitializeComponent();
@@ -21,12 +15,6 @@ namespace CyberCafe.Server.Views
             webBrowser1.Visible = false;
         }
 
-        /// <summary>
-        /// Handles the Load event of the FormReports control.
-        /// Initializes the date pickers with default values.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void FormReports_Load(object sender, EventArgs e)
         {
             dtpDaily.Value = DateTime.Today;
@@ -34,14 +22,6 @@ namespace CyberCafe.Server.Views
             dtpTo.Value = DateTime.Today;
         }
 
-        // === Daily Sales Report ===
-
-        /// <summary>
-        /// Handles the Click event of the Show Daily button.
-        /// Retrieves and displays the daily sales summary.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void btnShowDaily_Click(object sender, EventArgs e)
         {
             DataTable dt = DatabaseManager.GetDailySalesReport(dtpDaily.Value);
@@ -61,12 +41,6 @@ namespace CyberCafe.Server.Views
             }
         }
 
-        /// <summary>
-        /// Handles the Click event of the Print Daily button.
-        /// Generates an HTML report of the daily sales and opens the print preview dialog.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void btnPrintDaily_Click(object sender, EventArgs e)
         {
             DataTable dt = DatabaseManager.GetDailySalesReport(dtpDaily.Value);
@@ -94,26 +68,12 @@ namespace CyberCafe.Server.Views
             webBrowser1.DocumentCompleted += (s, args) => webBrowser1.ShowPrintPreviewDialog();
         }
 
-        // === Employee Performance Report ===
-
-        /// <summary>
-        /// Handles the Click event of the Show Employee button.
-        /// Retrieves and displays the employee performance report for the selected period.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void btnShowEmp_Click(object sender, EventArgs e)
         {
             DataTable dt = DatabaseManager.GetEmployeePerformanceReport(dtpFrom.Value, dtpTo.Value);
             dgvEmpReport.DataSource = dt;
         }
 
-        /// <summary>
-        /// Handles the Click event of the Print Employee button.
-        /// Generates an HTML report of employee performance and opens the print preview dialog.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="EventArgs"/> instance containing the event data.</param>
         private void btnPrintEmp_Click(object sender, EventArgs e)
         {
             DataTable dt = (DataTable)dgvEmpReport.DataSource;

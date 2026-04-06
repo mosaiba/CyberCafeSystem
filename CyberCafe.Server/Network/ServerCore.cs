@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Newtonsoft.Json;
@@ -14,7 +14,9 @@ namespace CyberCafe.Server
     public class ServerCore
     {
         private TcpListener _listener;
+        private UdpClient _discoveryListener; // جديد: مستخدم لاكتشاف السيرفر
         private int _port = 13000;
+        private int _discoveryPort = 13001; // جديد: بورت خاص لاكتشاف السيرفر
         private bool _isRunning;
 
         /// <summary>
@@ -46,7 +48,80 @@ namespace CyberCafe.Server
             monitorThread.IsBackground = true;
             monitorThread.Start();
 
-            OnLog?.Invoke($"Server Started on Port: {_port}");
+            // جديد: تشغيل خدمة اكتشاف السيرفر (UDP Broadcast)
+            StartDiscoveryListener();
+
+            OnLog?.Invoke($"Server Started on TCP Port: {_port}");
+        }
+
+        /// <summary>
+        /// جديد: يبدأ الاستماع لطلبات البث (UDP) للسماح للعملاء بالعثور على السيرفر تلقائياً.
+        /// </summary>
+        private void StartDiscoveryListener()
+        {
+            try
+            {
+                _discoveryListener = new UdpClient(_discoveryPort);
+                Thread discoveryThread = new Thread(() =>
+                {
+                    while (_isRunning)
+                    {
+                        try
+                        {
+                            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+                            // استقبال أي رسالة تأتي على بورت الاكتشاف
+                            byte[] data = _discoveryListener.Receive(ref remoteEP);
+                            string message = Encoding.UTF8.GetString(data);
+
+                            // التحقق مما إذا كانت الرسالة هي طلب بحث عن السيرفر
+                            if (message == "CYBERCAFE_DISCOVERY_REQUEST")
+                            {
+                                OnLog?.Invoke($"Discovery request received from {remoteEP.Address}");
+
+                                // إرسال الرد للعميل يحتوي على IP السيرفر وبورت الاتصال
+                                string myIP = GetLocalIPAddress();
+                                string response = $"CYBERCAFE_SERVER:{myIP}:{_port}";
+                                byte[] responseData = Encoding.UTF8.GetBytes(response);
+
+                                // إرسال الرد لنفس العنوان الذي أرسل الطلب
+                                _discoveryListener.Send(responseData, responseData.Length, remoteEP);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            // تجاهل الأخطاء الناتجة عن إغلاق السوكت
+                            if (_isRunning)
+                            {
+                                OnLog?.Invoke($"Discovery listener error: {ex.Message}");
+                            }
+                        }
+                    }
+                });
+                discoveryThread.IsBackground = true;
+                discoveryThread.Start();
+                OnLog?.Invoke($"Discovery Service Started on UDP Port: {_discoveryPort}");
+            }
+            catch (Exception ex)
+            {
+                OnLog?.Invoke($"Error starting Discovery Service: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// جديد: دالة مساعدة لجلب عنوان الـ IP الخاص بالجهاز (IPv4).
+        /// </summary>
+        private string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                // نختار فقط عناوين IPv4
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+            return "127.0.0.1"; // القيمة الافتراضية
         }
 
         /// <summary>
@@ -312,6 +387,7 @@ namespace CyberCafe.Server
         {
             _isRunning = false;
             _listener?.Stop();
+            _discoveryListener?.Close(); // جديد: إغلاق مستمع الاكتشاف
         }
     }
 }
