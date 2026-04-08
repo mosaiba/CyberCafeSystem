@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Newtonsoft.Json;
@@ -14,9 +14,9 @@ namespace CyberCafe.Server
     public class ServerCore
     {
         private TcpListener _listener;
-        private UdpClient _discoveryListener; // جديد: مستخدم لاكتشاف السيرفر
+        private UdpClient _discoveryListener; // Discovery listener for automatic UDP client broadcasting
         private int _port = 13000;
-        private int _discoveryPort = 13001; // جديد: بورت خاص لاكتشاف السيرفر
+        private int _discoveryPort = 13001; // Dedicated UDP port for discovery
         private bool _isRunning;
 
         /// <summary>
@@ -48,14 +48,14 @@ namespace CyberCafe.Server
             monitorThread.IsBackground = true;
             monitorThread.Start();
 
-            // جديد: تشغيل خدمة اكتشاف السيرفر (UDP Broadcast)
+            // Initialize the UDP discovery service to allow dynamic client detection
             StartDiscoveryListener();
 
             OnLog?.Invoke($"Server Started on TCP Port: {_port}");
         }
 
         /// <summary>
-        /// جديد: يبدأ الاستماع لطلبات البث (UDP) للسماح للعملاء بالعثور على السيرفر تلقائياً.
+        /// Initiates a UDP listener allowing clients to automatically resolve the server's IP address.
         /// </summary>
         private void StartDiscoveryListener()
         {
@@ -69,27 +69,27 @@ namespace CyberCafe.Server
                         try
                         {
                             IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
-                            // استقبال أي رسالة تأتي على بورت الاكتشاف
+                            // Listen for incoming broadcast payloads on the designated discovery port
                             byte[] data = _discoveryListener.Receive(ref remoteEP);
                             string message = Encoding.UTF8.GetString(data);
 
-                            // التحقق مما إذا كانت الرسالة هي طلب بحث عن السيرفر
+                            // Validate the message signature ensuring it represents a discovery query
                             if (message == "CYBERCAFE_DISCOVERY_REQUEST")
                             {
                                 OnLog?.Invoke($"Discovery request received from {remoteEP.Address}");
 
-                                // إرسال الرد للعميل يحتوي على IP السيرفر وبورت الاتصال
+                                // Respond with the local server IPv4 and the active TCP connection port
                                 string myIP = GetLocalIPAddress();
                                 string response = $"CYBERCAFE_SERVER:{myIP}:{_port}";
                                 byte[] responseData = Encoding.UTF8.GetBytes(response);
 
-                                // إرسال الرد لنفس العنوان الذي أرسل الطلب
+                                // Dispatch the resolution packet back directly to the broadcast origin
                                 _discoveryListener.Send(responseData, responseData.Length, remoteEP);
                             }
                         }
                         catch (Exception ex)
                         {
-                            // تجاهل الأخطاء الناتجة عن إغلاق السوكت
+                            // Safely ignore ThreadAbort or disposed socket exceptions during shutdown
                             if (_isRunning)
                             {
                                 OnLog?.Invoke($"Discovery listener error: {ex.Message}");
@@ -108,20 +108,20 @@ namespace CyberCafe.Server
         }
 
         /// <summary>
-        /// جديد: دالة مساعدة لجلب عنوان الـ IP الخاص بالجهاز (IPv4).
+        /// Helper routine to extract the active IPv4 address of the local machine.
         /// </summary>
         private string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
             {
-                // نختار فقط عناوين IPv4
+                // Filter exclusively for InterNetwork (IPv4) addressing
                 if (ip.AddressFamily == AddressFamily.InterNetwork)
                 {
                     return ip.ToString();
                 }
             }
-            return "127.0.0.1"; // القيمة الافتراضية
+            return "127.0.0.1"; // Fallback to loopback adapter
         }
 
         /// <summary>
@@ -387,7 +387,7 @@ namespace CyberCafe.Server
         {
             _isRunning = false;
             _listener?.Stop();
-            _discoveryListener?.Close(); // جديد: إغلاق مستمع الاكتشاف
+            _discoveryListener?.Close(); // Stop the UDP discovery listener safely
         }
     }
 }

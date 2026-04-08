@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -37,10 +37,10 @@ namespace CyberCafe.Client.Network
         private TcpClient _client;
         private NetworkStream _stream;
 
-        // تم إزالة الـ IP الثابت ليتم اكتشافه تلقائياً
+        // Hardcoded endpoint dependencies removed in favor of dynamic discovery.
         private string _serverIp = "";
         private int _port = 13000;
-        private int _discoveryPort = 13001; // بورت الاكتشاف
+        private int _discoveryPort = 13001; // The targeted UDP broadcast port
 
         // System.Threading.Timer is used for stability as it runs in the background thread pool.
         private System.Threading.Timer _heartbeatTimer;
@@ -65,9 +65,9 @@ namespace CyberCafe.Client.Network
         }
 
         /// <summary>
-        /// جديد: يبحث عن السيرفر في الشبكة باستخدام UDP Broadcast.
+        /// Invokes a network-wide UDP broadcast looking for an active CyberCafe server.
         /// </summary>
-        /// <returns>True إذا تم العثور على السيرفر وتحديد الـ IP، وإلا False.</returns>
+        /// <returns>True if a server responded and a valid IP was captured, otherwise False.</returns>
         public bool DiscoverServer()
         {
             using (UdpClient udp = new UdpClient())
@@ -75,34 +75,34 @@ namespace CyberCafe.Client.Network
                 try
                 {
                     udp.EnableBroadcast = true;
-                    udp.Client.ReceiveTimeout = 3000; // انتظار 3 ثواني كحد أقصى
+                    udp.Client.ReceiveTimeout = 3000; // Constrain the blocking wait to 3 seconds
 
                     string request = "CYBERCAFE_DISCOVERY_REQUEST";
                     byte[] data = Encoding.UTF8.GetBytes(request);
 
-                    // إرسال طلب البحث لجميع الأجهزة
+                    // Transmit to the IPv4 broadcast mask
                     udp.Send(data, data.Length, "255.255.255.255", _discoveryPort);
 
-                    // انتظار الرد
+                    // Block thread pending UDP response envelope
                     IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
                     byte[] response = udp.Receive(ref remoteEP);
                     string respString = Encoding.UTF8.GetString(response);
 
-                    // تحليل الرد (CYBERCAFE_SERVER:IP:PORT)
+                    // Decode server reply payload configuration
                     if (respString.StartsWith("CYBERCAFE_SERVER:"))
                     {
                         string[] parts = respString.Split(':');
                         if (parts.Length >= 3)
                         {
-                            _serverIp = parts[1]; // تحديث الـ IP
-                            // _port = int.Parse(parts[2]); // يمكن استخدامه إذا كان البورت متغيراً
+                            _serverIp = parts[1]; // Store the resolved backend IP destination
+                            // _port = int.Parse(parts[2]); // Implementable if dynamic port allocation is needed
                             return true;
                         }
                     }
                 }
                 catch (SocketException)
                 {
-                    // انتهى الوقت ولم يتم العثور على رد
+                    // Triggered when ReceiveTimeout is eclipsed; exit gracefully
                     return false;
                 }
                 catch (Exception)
@@ -119,7 +119,7 @@ namespace CyberCafe.Client.Network
         /// <returns>True if the connection was successful, otherwise false.</returns>
         public bool Connect()
         {
-            // إذا لم يتم اكتشاف الـ IP مسبقاً، لا تحاول الاتصال
+            // Abort routine early if no dynamic IP was successfully discovered
             if (string.IsNullOrEmpty(_serverIp)) return false;
             if (_isConnected) return true;
 

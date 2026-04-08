@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net.NetworkInformation;
 using CyberCafe.Client.Helpers;
 using CyberCafe.Client.Network;
@@ -123,12 +123,12 @@ namespace CyberCafe.Client
 
             System.Threading.Tasks.Task.Run(() =>
             {
-                // الخطوة 1: البحث عن السيرفر في الشبكة
+                // Step 1: Initiate network discovery to locate the backend server
                 bool found = _network.DiscoverServer();
 
                 if (found)
                 {
-                    // تم العثور على السيرفر، حاول الاتصال الآن
+                    // Target acquired, initiating TCP payload connection
                     this.Invoke(new Action(() => lblStatus.Text = "Connecting..."));
 
                     bool connected = _network.Connect();
@@ -144,7 +144,7 @@ namespace CyberCafe.Client
                 }
                 else
                 {
-                    // لم يتم العثور على السيرفر
+                    // Broadcase timed out with no response
                     this.Invoke(new Action(() =>
                     {
                         lblStatus.Text = "Server Not Found";

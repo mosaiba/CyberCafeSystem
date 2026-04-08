@@ -1,4 +1,4 @@
-﻿namespace CyberCafe.Server.Views
+namespace CyberCafe.Server.Views
 {
     partial class FormEmployees
     {
@@ -53,29 +53,29 @@
             // 
             dgvEmployees.AllowUserToAddRows = false;
             dgvEmployees.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dgvEmployees.BackgroundColor = Color.WhiteSmoke; // خلفية فاتحة للجدول
+            dgvEmployees.BackgroundColor = Color.WhiteSmoke;
             dgvEmployees.BorderStyle = BorderStyle.None;
             dgvEmployees.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             dgvEmployees.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
 
-            // تنسيق رأس الجدول (يبقى داكن ليعطي لمسة جمالية)
+            // Header Aesthetics Application
             dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
             dataGridViewCellStyle1.BackColor = Color.FromArgb(45, 45, 48);
             dataGridViewCellStyle1.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-            dataGridViewCellStyle1.ForeColor = Color.White; // نص الرأس أبيض
+            dataGridViewCellStyle1.ForeColor = Color.White;
             dataGridViewCellStyle1.SelectionBackColor = Color.FromArgb(45, 45, 48);
             dataGridViewCellStyle1.SelectionForeColor = Color.White;
             dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
             dgvEmployees.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             dgvEmployees.ColumnHeadersHeight = 40;
 
-            // تنسيق الخلايا (الخط أسود والخلفية فاتحة)
+            // Cell Theming
             dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle2.BackColor = Color.White; // خلفية الخلايا بيضاء
+            dataGridViewCellStyle2.BackColor = Color.White;
             dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F);
-            dataGridViewCellStyle2.ForeColor = Color.Black; // اللون الأسود المطلوب
-            dataGridViewCellStyle2.SelectionBackColor = Color.FromArgb(230, 230, 230); // لون تحديد رمادي فاتح
-            dataGridViewCellStyle2.SelectionForeColor = Color.Black; // نص التحديد أسود أيضاً
+            dataGridViewCellStyle2.ForeColor = Color.Black;
+            dataGridViewCellStyle2.SelectionBackColor = Color.FromArgb(230, 230, 230);
+            dataGridViewCellStyle2.SelectionForeColor = Color.Black;
             dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
             dgvEmployees.DefaultCellStyle = dataGridViewCellStyle2;
 

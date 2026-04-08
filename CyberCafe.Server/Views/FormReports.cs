@@ -4,6 +4,10 @@ using CyberCafe.Core.Data;
 
 namespace CyberCafe.Server.Views
 {
+    /// <summary>
+    /// Represents the reporting dashboard to generate, view, and print 
+    /// daily sales and employee performance statistics.
+    /// </summary>
     public partial class FormReports : Form
     {
         private WebBrowser webBrowser1 = new WebBrowser();

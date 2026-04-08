@@ -1,4 +1,4 @@
-﻿namespace CyberCafe.Client
+namespace CyberCafe.Client
 {
     partial class FormClient
     {
@@ -88,18 +88,18 @@
             // 
             // lblStatus
             // 
-            lblStatus.AutoSize = false; // === مهم: تعطيل التمدد التلقائي ===
-            lblStatus.BackColor = Color.Transparent; // لجعله شفافاً وأنيقاً
+            lblStatus.AutoSize = false; // Constrain label bounds strictly
+            lblStatus.BackColor = Color.Transparent; // Alpha compositing for better visuals
             lblStatus.Font = new Font("Segoe UI", 9F);
             lblStatus.ForeColor = Color.Silver;
-            lblStatus.Location = new Point(25, 160); // نفس بداية زر الدخول
+            lblStatus.Location = new Point(25, 160);
             lblStatus.Name = "lblStatus";
-            lblStatus.Size = new Size(250, 30); // نفس عرض الزر، وارتفاع مناسب لسطرين
+            lblStatus.Size = new Size(250, 30);
             lblStatus.TabIndex = 3;
             lblStatus.Text = "Waiting...";
-            lblStatus.TextAlign = ContentAlignment.MiddleCenter; // === مهم: توسيط النص داخل المساحة الثابتة ===
+            lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             // 
-            // pnlSession (الشريط العلوي)
+            // Initialize Top Session Panel Overlay
             // 
             pnlSession.BackColor = Color.FromArgb(20, 20, 20);
             pnlSession.Controls.Add(lblTime);

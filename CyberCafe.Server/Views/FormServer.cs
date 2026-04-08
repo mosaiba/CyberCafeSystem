@@ -1,62 +1,76 @@
-﻿using CyberCafe.Core.Data;
+using CyberCafe.Core.Data;
 using CyberCafe.Core.Network;
 using CyberCafe.Server.Views;
 
 namespace CyberCafe.Server
 {
+    /// <summary>
+    /// Represents the main server form that manages connected client devices, 
+    /// employee sessions, administrative commands, and data logs.
+    /// </summary>
     public partial class FormServer : Form
     {
         private ServerCore _server;
         private System.Windows.Forms.Timer _updateGridTimer;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FormServer"/> class.
+        /// </summary>
         public FormServer()
         {
             InitializeComponent();
             _server = new ServerCore();
         }
 
+        /// <summary>
+        /// Handles the Load event of the main server form.
+        /// Initializes UI, starts the network server, and forces employee login.
+        /// </summary>
         public void Form1_Load(object sender, EventArgs e)
         {
-            // === 1. تهيئة الجداول أولاً (قبل أي محاولة لكتابة اللوج) ===
+            // === 1. Initialize data grids primarily (before writing logs) ===
             InitializeGrids();
 
-            // === 2. ربط حدث التسجيل ===
+            // === 2. Bind the logging event hook ===
             _server.OnLog = (msg) =>
             {
-                // التحقق من الخيوط (Invoke) ضروري قبل الوصول للعناصر
+                // Ensure thread safety via Invoke before accessing UI controls
                 if (dgvLogs.InvokeRequired)
                     dgvLogs.Invoke(new Action(() => AddLog(msg)));
                 else
                     AddLog(msg);
             };
 
-            // === 3. تشغيل السيرفر ===
+            // === 3. Start the TCP server listener ===
             _server.Start();
 
-            // === 4. تشغيل مؤقت التحديث ===
+            // === 4. Start the UI polling timer to refresh grid data ===
             _updateGridTimer = new System.Windows.Forms.Timer();
             _updateGridTimer.Interval = 1000;
             _updateGridTimer.Tick += (s, args) => RefreshDeviceGrid();
             _updateGridTimer.Start();
 
-            // === 5. طلب تسجيل الدخول ===
+            // === 5. Request administrator or cashier login ===
             ShowLoginScreen();
         }
 
-        // دالة لتهيئة الجداول
+        /// <summary>
+        /// Initializes the UI datagrids columns and configurations.
+        /// </summary>
         private void InitializeGrids()
         {
-            // تهيئة جدول السجلات
+            // Initialize Logs Grid
             if (dgvLogs.Columns.Count == 0)
             {
                 dgvLogs.Columns.Add("Time", "Time");
                 dgvLogs.Columns.Add("Message", "Message");
-                // ضبط عرض الأعمدة (اختياري)
+                
+                // Adjust column sizing
                 dgvLogs.Columns["Time"].Width = 80;
                 dgvLogs.Columns["Message"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }
 
-            // تهيئة جدول الأجهزة
+            // Initialize Connected Devices Grid
             if (dgvDevices.Columns.Count == 0)
             {
                 dgvDevices.Columns.Add("FriendlyName", "Device Name");
@@ -65,13 +79,14 @@ namespace CyberCafe.Server
                 dgvDevices.Columns.Add("LastSeen", "Last Seen");
                 dgvDevices.Columns.Add("MacAddress", "MAC");
 
-                // إخفاء عمود الـ MAC
+                // Keep the MAC Address column hidden from standard UI view
                 dgvDevices.Columns["MacAddress"].Visible = false;
             }
         }
 
-        // باقي الدوال كما هي (ShowLoginScreen, RefreshDeviceGrid, AddLog... إلخ)
-
+        /// <summary>
+        /// Displays the login form and applies UI restrictions based on the signed-in role.
+        /// </summary>
         private void ShowLoginScreen()
         {
             CurrentSession.EmployeeID = 0;
@@ -127,14 +142,18 @@ namespace CyberCafe.Server
             }
         }
 
+        /// <summary>
+        /// Adds a message entry to the system logs grid and auto-scrolls to the bottom.
+        /// </summary>
+        /// <param name="message">The text command or state message to log.</param>
         private void AddLog(string message)
         {
-            // التأكد من وجود أعمدة قبل الإضافة (احتياط إضافي)
+            // Ensure data grid columns exist
             if (dgvLogs.Columns.Count == 0) return;
 
             dgvLogs.Rows.Add(DateTime.Now.ToString("HH:mm:ss"), message);
 
-            // التمرير التلقائي لآخر سطر
+            // Automatically scroll to the latest row
             if (dgvLogs.Rows.Count > 0)
                 dgvLogs.FirstDisplayedScrollingRowIndex = dgvLogs.Rows.Count - 1;
         }

@@ -1,14 +1,21 @@
-﻿using System.Data;
+using System.Data;
 using CyberCafe.Core.Data;
 
 namespace CyberCafe.Server.Views
 {
+    /// <summary>
+    /// Represents the login form for employee authentication.
+    /// Provides security gates for server initialization and exiting.
+    /// </summary>
     public partial class FormLogin : Form
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FormLogin"/> class.
+        /// </summary>
         public FormLogin()
         {
             InitializeComponent();
-            // ربط حدث الإغلاق يدوياً للتأكد من عمله
+            // Manually bind the closing event to handle server shutdown logic
             this.FormClosing += FormLogin_FormClosing;
         }
 
@@ -39,22 +46,27 @@ namespace CyberCafe.Server.Views
             }
         }
 
-        // الزر الآن فقط يطلب إغلاق النافذة، والحدث FormClosing يتولى الباقي
+        /// <summary>
+        /// Initiates the form closing process. The actual exit logic is handled by FormLogin_FormClosing.
+        /// </summary>
         private void btnExit_Click(object sender, EventArgs e)
         {
             this.Close();
         }
 
-        // هذا الحدث هو المسؤول الوحيد عن قرار الإغلاق أو الإلغاء
+        /// <summary>
+        /// Centralized event handler for deciding whether to close the application.
+        /// Warns the user of server shutdown if they attempt to close the application without logging in.
+        /// </summary>
         private void FormLogin_FormClosing(object sender, FormClosingEventArgs e)
         {
-            // إذا تم تسجيل الدخول بنجاح، اسمح بالإغلاق دون أسئلة
+            // Allow seamless closing if the user successfully authenticated
             if (this.DialogResult == DialogResult.OK) return;
 
-            // إذا كان السبب هو ضغط المستخدم على X أو زر الخروج (وليس إغلاق من الكود)
+            // If the user explicitly clicked X or the Exit button (bypassing code-driven closes)
             if (e.CloseReason == CloseReason.UserClosing)
             {
-                // إلغاء أمر الإغلاق مؤقتاً لنسأل المستخدم
+                // Temporarily cancel the close operation to prompt for confirmation
                 e.Cancel = true;
 
                 DialogResult dr = MessageBox.Show(
@@ -65,11 +77,11 @@ namespace CyberCafe.Server.Views
 
                 if (dr == DialogResult.Yes)
                 {
-                    // إذا وافق، نلغي خاصية Cancel ونخرج من البرنامج
+                    // If confirmed, proceed to forcefully shut down the entire application
                     e.Cancel = false;
                     Application.Exit();
                 }
-                // إذا ضغط No، الـ e.Cancel يظل true، وبالتالي النافذة لن تغلق
+                // If the user clicked No, e.Cancel remains true preventing the window from closing
             }
         }
 

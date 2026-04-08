@@ -1,12 +1,18 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 using CyberCafe.Core.Data;
 using CyberCafe.Server.Views;
 
 namespace CyberCafe.Server
 {
+    /// <summary>
+    /// Provides the main entry point for the CyberCafe Server application.
+    /// </summary>
     internal static class Program
     {
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
         [STAThread]
         static void Main()
         {
@@ -16,7 +22,7 @@ namespace CyberCafe.Server
 
             try
             {
-                // تهيئة قاعدة البيانات
+                // Initialize the database and test data on startup
                 DatabaseManager.InitializeDatabase();
                 DatabaseManager.SeedTestData();
             }
@@ -26,8 +32,8 @@ namespace CyberCafe.Server
                 return;
             }
 
-            // التعديل الأهم: تشغيل الفورم الرئيسي (FormServer) مباشرة
-            // FormServer سيقوم بدوره بتشغيل السيرفر ثم استدعاء شاشة الدخول (FormLogin)
+            // Important: Launch the main server form directly.
+            // FormServer will spin up the networking listener and enforce the login screen (FormLogin)
             Application.Run(new FormServer());
         }
     }
