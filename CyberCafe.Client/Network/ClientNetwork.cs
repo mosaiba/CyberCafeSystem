@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using Newtonsoft.Json;
 using CyberCafe.Core.Network;
+using System.Net.NetworkInformation; // Added for network interface scanning
 
 namespace CyberCafe.Client.Network
 {
@@ -37,17 +38,13 @@ namespace CyberCafe.Client.Network
         private TcpClient _client;
         private NetworkStream _stream;
 
-        // Hardcoded endpoint dependencies removed in favor of dynamic discovery.
         private string _serverIp = "";
         private int _port = 13000;
-        private int _discoveryPort = 13001; // The targeted UDP broadcast port
+        private int _discoveryPort = 13001;
 
-        // System.Threading.Timer is used for stability as it runs in the background thread pool.
         private System.Threading.Timer _heartbeatTimer;
         private string _myDeviceId = "CLIENT-01";
         private readonly object _lock = new object();
-
-        // === Critical Fix: Flag to track connection state and prevent infinite loops ===
         private volatile bool _isConnected = false;
 
         /// <summary>
@@ -66,6 +63,7 @@ namespace CyberCafe.Client.Network
 
         /// <summary>
         /// Invokes a network-wide UDP broadcast looking for an active CyberCafe server.
+        /// Uses both Global Broadcast and Directed Broadcast for better reliability.
         /// </summary>
         /// <returns>True if a server responded and a valid IP was captured, otherwise False.</returns>
         public bool DiscoverServer()
@@ -75,27 +73,63 @@ namespace CyberCafe.Client.Network
                 try
                 {
                     udp.EnableBroadcast = true;
-                    udp.Client.ReceiveTimeout = 3000; // Constrain the blocking wait to 3 seconds
+                    udp.Client.ReceiveTimeout = 3000; // 3 seconds timeout
 
                     string request = "CYBERCAFE_DISCOVERY_REQUEST";
                     byte[] data = Encoding.UTF8.GetBytes(request);
 
-                    // Transmit to the IPv4 broadcast mask
+                    // STRATEGY 1: Global Broadcast (Standard)
+                    // Sends to 255.255.255.255
                     udp.Send(data, data.Length, "255.255.255.255", _discoveryPort);
+
+                    // STRATEGY 2: Directed Broadcast (Robust)
+                    // Calculates the broadcast address for the specific subnet (e.g., 192.168.1.255)
+                    // This is often necessary as some routers block global broadcasts between devices.
+                    foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
+                    {
+                        if (ni.OperationalStatus == OperationalStatus.Up &&
+                            ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                        {
+                            foreach (UnicastIPAddressInformation ip in ni.GetIPProperties().UnicastAddresses)
+                            {
+                                if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                                {
+                                    try
+                                    {
+                                        byte[] ipBytes = ip.Address.GetAddressBytes();
+                                        byte[] maskBytes = ip.IPv4Mask.GetAddressBytes();
+
+                                        if (maskBytes != null && ipBytes.Length == maskBytes.Length)
+                                        {
+                                            byte[] broadcastBytes = new byte[4];
+                                            for (int i = 0; i < 4; i++)
+                                            {
+                                                // Broadcast = IP OR (NOT Mask)
+                                                broadcastBytes[i] = (byte)(ipBytes[i] | ~maskBytes[i]);
+                                            }
+
+                                            IPAddress broadcastAddress = new IPAddress(broadcastBytes);
+                                            // Send to the calculated subnet broadcast address
+                                            udp.Send(data, data.Length, broadcastAddress.ToString(), _discoveryPort);
+                                        }
+                                    }
+                                    catch { /* Ignore calculation errors */ }
+                                }
+                            }
+                        }
+                    }
 
                     // Block thread pending UDP response envelope
                     IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
                     byte[] response = udp.Receive(ref remoteEP);
                     string respString = Encoding.UTF8.GetString(response);
 
-                    // Decode server reply payload configuration
                     if (respString.StartsWith("CYBERCAFE_SERVER:"))
                     {
                         string[] parts = respString.Split(':');
                         if (parts.Length >= 3)
                         {
-                            _serverIp = parts[1]; // Store the resolved backend IP destination
-                            // _port = int.Parse(parts[2]); // Implementable if dynamic port allocation is needed
+                            _serverIp = parts[1];
                             return true;
                         }
                     }
@@ -119,7 +153,6 @@ namespace CyberCafe.Client.Network
         /// <returns>True if the connection was successful, otherwise false.</returns>
         public bool Connect()
         {
-            // Abort routine early if no dynamic IP was successfully discovered
             if (string.IsNullOrEmpty(_serverIp)) return false;
             if (_isConnected) return true;
 
@@ -129,18 +162,14 @@ namespace CyberCafe.Client.Network
                 _client.Connect(_serverIp, _port);
                 _stream = _client.GetStream();
 
-                // Mark as connected immediately after successful handshake
                 _isConnected = true;
 
-                // Notify the UI or other subscribers about the connection
                 OnConnected?.Invoke();
 
-                // Start the listening thread for incoming server messages
                 Thread listenThread = new Thread(ListenForServer);
                 listenThread.IsBackground = true;
                 listenThread.Start();
 
-                // Start sending heartbeat pulses every 3 seconds
                 _heartbeatTimer = new System.Threading.Timer(HeartbeatCallback, null, 3000, 3000);
 
                 return true;
@@ -154,14 +183,8 @@ namespace CyberCafe.Client.Network
             }
         }
 
-        /// <summary>
-        /// Sends heartbeat pulses to the server to maintain the connection.
-        /// Runs in a background thread pool.
-        /// </summary>
-        /// <param name="state">The timer state object.</param>
         private void HeartbeatCallback(object state)
         {
-            // Do not attempt to send if already disconnected
             if (!_isConnected) return;
 
             try
@@ -179,10 +202,8 @@ namespace CyberCafe.Client.Network
                     Payload = "PING"
                 };
 
-                // Attempt to send the heartbeat packet
                 if (!SendPacketInternal(heartbeat))
                 {
-                    // If sending fails, consider the connection lost
                     TriggerServerLost();
                 }
             }
@@ -192,13 +213,8 @@ namespace CyberCafe.Client.Network
             }
         }
 
-        /// <summary>
-        /// Sends a network packet to the server.
-        /// </summary>
-        /// <param name="packet">The packet to send.</param>
         public void SendPacket(NetworkPacket packet)
         {
-            // Prevent sending on a closed connection to avoid IOException loops
             if (!_isConnected) return;
 
             packet.SenderId = _myDeviceId;
@@ -208,11 +224,6 @@ namespace CyberCafe.Client.Network
             }
         }
 
-        /// <summary>
-        /// Internal method to send a packet, ensuring thread safety.
-        /// </summary>
-        /// <param name="packet">The network packet to send.</param>
-        /// <returns>True if the packet was sent successfully, otherwise false.</returns>
         private bool SendPacketInternal(NetworkPacket packet)
         {
             if (_stream == null || !_stream.CanWrite) return false;
@@ -222,7 +233,7 @@ namespace CyberCafe.Client.Network
                 string json = JsonConvert.SerializeObject(packet);
                 byte[] buffer = Encoding.UTF8.GetBytes(json);
 
-                lock (_lock) // Lock to prevent concurrent send operations
+                lock (_lock)
                 {
                     _stream.Write(buffer, 0, buffer.Length);
                     _stream.Flush();
@@ -235,9 +246,6 @@ namespace CyberCafe.Client.Network
             }
         }
 
-        /// <summary>
-        /// Continuously listens for incoming data from the server.
-        /// </summary>
         private void ListenForServer()
         {
             byte[] buffer = new byte[1024];
@@ -245,7 +253,6 @@ namespace CyberCafe.Client.Network
 
             try
             {
-                // Keep reading while connected and data is available
                 while (_isConnected && (byteCount = _stream.Read(buffer, 0, buffer.Length)) != 0)
                 {
                     string receivedJson = Encoding.UTF8.GetString(buffer, 0, byteCount);
@@ -263,33 +270,22 @@ namespace CyberCafe.Client.Network
             }
             catch
             {
-                // Any error during reading implies disconnection
                 TriggerServerLost();
             }
         }
 
-        /// <summary>
-        /// Triggers the server connection loss sequence.
-        /// Ensures cleanup logic runs only once to prevent loops.
-        /// </summary>
         private void TriggerServerLost()
         {
-            // === CRITICAL FIX: Return if already disconnected to prevent infinite recursion ===
             if (!_isConnected) return;
 
-            // 1. Update state immediately
             _isConnected = false;
-
-            // 2. Stop the heartbeat timer
             _heartbeatTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
-            // 3. Clean up resources safely
             try { _stream?.Close(); } catch { }
             try { _client?.Close(); } catch { }
             _stream = null;
             _client = null;
 
-            // 4. Notify the application
             OnServerLost?.Invoke();
         }
     }

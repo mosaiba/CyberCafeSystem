@@ -5,18 +5,21 @@ using Newtonsoft.Json;
 using CyberCafe.Core.Network;
 using CyberCafe.Core.Data;
 using System.Collections.Concurrent;
+using System.Net.NetworkInformation;
+using System.Linq; // Required for potential future queries, currently using foreach for clarity
 
 namespace CyberCafe.Server
 {
     /// <summary>
-    /// Manages core network operations for the server, including listening for client connections and processing packets.
+    /// Manages core network operations for the server, including listening for client connections, 
+    /// handling UDP discovery, and enforcing business logic such as preventing concurrent logins.
     /// </summary>
     public class ServerCore
     {
         private TcpListener _listener;
-        private UdpClient _discoveryListener; // Discovery listener for automatic UDP client broadcasting
+        private UdpClient _discoveryListener;
         private int _port = 13000;
-        private int _discoveryPort = 13001; // Dedicated UDP port for discovery
+        private int _discoveryPort = 13001;
         private bool _isRunning;
 
         /// <summary>
@@ -108,10 +111,44 @@ namespace CyberCafe.Server
         }
 
         /// <summary>
-        /// Helper routine to extract the active IPv4 address of the local machine.
+        /// Retrieves the active IPv4 address of the local machine.
+        /// Filters out virtual adapters (VirtualBox, VMware) to ensure the server advertises a reachable LAN IP.
         /// </summary>
         private string GetLocalIPAddress()
         {
+            try
+            {
+                // Iterate through all network interfaces on the machine
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    // Skip interfaces that are not operational or are loopback adapters
+                    if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                    if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+
+                    // Skip common virtual adapters which often generate unreachable IPs
+                    string description = nic.Description.ToLower();
+                    if (description.Contains("virtualbox") || description.Contains("vmware") ||
+                        description.Contains("hyper-v") || description.Contains("virtual"))
+                        continue;
+
+                    // Prioritize physical Ethernet or Wireless adapters
+                    if (nic.NetworkInterfaceType == NetworkInterfaceType.Ethernet ||
+                        nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
+                    {
+                        // Extract the IPv4 address from the adapter's properties
+                        foreach (UnicastIPAddressInformation ip in nic.GetIPProperties().UnicastAddresses)
+                        {
+                            if (ip.Address.AddressFamily == AddressFamily.InterNetwork)
+                            {
+                                return ip.Address.ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // Fallback: If no physical adapter is found, attempt to resolve via DNS
             var host = Dns.GetHostEntry(Dns.GetHostName());
             foreach (var ip in host.AddressList)
             {
@@ -271,6 +308,25 @@ namespace CyberCafe.Server
         }
 
         /// <summary>
+        /// Checks if a specific voucher code is currently being used by another active device.
+        /// This is critical for preventing concurrent logins (Double Spend).
+        /// </summary>
+        /// <param name="code">The voucher code to check.</param>
+        /// <returns>True if the voucher is currently in use, otherwise false.</returns>
+        private bool IsVoucherInUse(string code)
+        {
+            foreach (var device in ConnectedDevices.Values)
+            {
+                // Check if the device has an active session with the requested code
+                if (!string.IsNullOrEmpty(device.CurrentCode) && device.CurrentCode == code)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Processes an individual network packet received from a client.
         /// </summary>
         /// <param name="packet">The received network packet.</param>
@@ -291,6 +347,15 @@ namespace CyberCafe.Server
                     break;
 
                 case PacketType.LoginRequest:
+                    // === CRITICAL CHECK: Prevent Concurrent Login ===
+                    if (IsVoucherInUse(packet.Payload))
+                    {
+                        SendResponse(stream, PacketType.LoginResponse, "ERROR: This voucher is already in use on another machine.");
+                        OnLog?.Invoke($"Login Denied: Voucher {packet.Payload} is already active on another device.");
+                        break; // Stop processing login request
+                    }
+                    // ===============================================
+
                     string validationResult = DatabaseManager.ValidateVoucher(packet.Payload);
                     if (validationResult.StartsWith("SUCCESS"))
                     {

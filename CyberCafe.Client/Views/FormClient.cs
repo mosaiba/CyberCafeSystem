@@ -77,12 +77,16 @@ namespace CyberCafe.Client
                     this.Invoke(new Action(() => {
                         lblStatus.Text = "Connected to Server";
                         lblStatus.ForeColor = Color.Silver;
+
+                        // Hide retry button when connected
+                        if (btnRetry != null) btnRetry.Visible = false;
                     }));
                 }
                 else
                 {
                     lblStatus.Text = "Connected to Server";
                     lblStatus.ForeColor = Color.Silver;
+                    if (btnRetry != null) btnRetry.Visible = false;
                 }
             };
 
@@ -98,13 +102,14 @@ namespace CyberCafe.Client
                 }
             };
 
-            // D. Attempt to establish connection to the server
-            TryConnect();
-
-            // Bind button events
+            // D. Bind UI events
             btnLogin.Click += btnLogin_Click;
             btnLogout.Click += btnLogout_Click;
+            btnRetry.Click += btnRetry_Click; // Bind the designer button
             txtCode.MouseClick += (s, args) => { if (txtCode.Text == "Enter Code") txtCode.Text = ""; };
+
+            // E. Attempt to establish connection to the server
+            TryConnect();
 
             // Enable secret admin shortcut key
             this.KeyPreview = true;
@@ -120,6 +125,9 @@ namespace CyberCafe.Client
         {
             lblStatus.Text = "Discovering Server...";
             lblStatus.ForeColor = Color.Silver;
+
+            // Hide retry button when attempting to connect
+            if (btnRetry != null) btnRetry.Visible = false;
 
             System.Threading.Tasks.Task.Run(() =>
             {
@@ -139,6 +147,9 @@ namespace CyberCafe.Client
                         {
                             lblStatus.Text = "Connection Failed";
                             lblStatus.ForeColor = Color.Red;
+
+                            // Show retry button on failure
+                            if (btnRetry != null) btnRetry.Visible = true;
                         }));
                     }
                 }
@@ -149,9 +160,20 @@ namespace CyberCafe.Client
                     {
                         lblStatus.Text = "Server Not Found";
                         lblStatus.ForeColor = Color.Red;
+
+                        btnRetry.Visible = true;
+                        btnRetry.BringToFront();
                     }));
                 }
             });
+        }
+
+        /// <summary>
+        /// Handles the Retry button click event.
+        /// </summary>
+        private void btnRetry_Click(object sender, EventArgs e)
+        {
+            TryConnect();
         }
 
         // === Display Modes ===
@@ -223,6 +245,7 @@ namespace CyberCafe.Client
             {
                 lblStatus.Text = "Server Offline";
                 lblStatus.ForeColor = Color.Red;
+                if (btnRetry != null) btnRetry.Visible = true;
                 return;
             }
 
@@ -329,11 +352,13 @@ namespace CyberCafe.Client
             {
                 lblStatus.Text = "Connected to Server";
                 lblStatus.ForeColor = Color.Silver;
+                if (btnRetry != null) btnRetry.Visible = false;
             }
             else
             {
                 lblStatus.Text = "Server Offline";
                 lblStatus.ForeColor = Color.Red;
+                if (btnRetry != null) btnRetry.Visible = true;
             }
 
             txtCode.Text = "Enter Code";
